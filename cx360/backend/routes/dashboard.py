@@ -207,3 +207,25 @@ async def get_sentiment_distribution(
     ]
 
     return SentimentDistributionResponse(data=response_data)
+
+# --- Endpoint for Recommendations ---
+from cx360.backend.services.recommendation_service import generate_recommendations
+
+class RecommendationsResponse(BaseModel):
+    recommendations: List[str]
+
+@router.get("/recommendations", response_model=RecommendationsResponse)
+async def get_dashboard_recommendations(
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_active_user) # Protected endpoint
+):
+    # The generate_recommendations function is synchronous, so no await needed here.
+    # If it were async, this endpoint would need to be async and use await.
+    # The current generate_recommendations calls alert_service.check_for_recent_negative_feedback_alert,
+    # which is synchronous. If alert_service becomes async (e.g., for async email),
+    # then generate_recommendations would also need to be async, and this endpoint too.
+    # For now, all involved services are synchronous.
+
+    recommendations_list = generate_recommendations(db)
+
+    return RecommendationsResponse(recommendations=recommendations_list)

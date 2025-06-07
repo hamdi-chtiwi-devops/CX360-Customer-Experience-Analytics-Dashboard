@@ -2,8 +2,11 @@ import logging
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import datetime, timedelta
+import os # For environment variables
+from pydantic import EmailStr # For validating recipient email
 
 from cx360.backend.models.feedback import Feedback as FeedbackModel
+from .email_service import log_email_intent # Import the email logging function
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -53,7 +56,22 @@ def check_for_recent_negative_feedback_alert(db: Session) -> str | None:
                 f"{negative_feedback_count} negative entries in the last {ALERT_TIME_WINDOW_HOURS} hour(s)."
             )
             logger.warning(alert_message) # Log the alert as a warning
-            return alert_message
+
+            # Log email intent
+            recipient_email_str = os.getenv("ALERT_EMAIL_TO", "default_admin@example.com")
+            if recipient_email_str:
+                try:
+                    # Validate email before using (optional, as MessageSchema would also validate)
+                    valid_recipient = EmailStr(recipient_email_str)
+                    log_email_intent(
+                        subject="CX360 Alert: High Volume of Negative Feedback",
+                        recipient_to=[valid_recipient],
+                        body=alert_message
+                    )
+                except ValueError as e_val: # Pydantic validation error for EmailStr
+                    logger.error(f"Invalid ALERT_EMAIL_TO address: {recipient_email_str}. Error: {e_val}")
+
+            return alert_message # Return the message regardless of email logging outcome
 
         return None # No alert condition met
 

@@ -13,6 +13,30 @@ from cx360.backend.routes import dashboard as dashboard_router # Added dashboard
 # If you have other routers, import them here
 # from .routes import other_module as other_router
 
+# --- Email Configuration ---
+from fastapi_mail import ConnectionConfig, FastMail
+from pydantic import EmailStr # EmailStr is already used in models, but good to ensure it's available here
+import os
+
+# FastMail Configuration
+# Using SUPPRESS_SEND=1 for "console backend" behavior.
+# Actual emails will not be sent; intent will be logged by the email service.
+# Environment variables for actual SMTP server are placeholders if SUPPRESS_SEND=1.
+conf = ConnectionConfig(
+    MAIL_USERNAME=os.getenv("MAIL_USERNAME", "consoleuser"), # Placeholder for console
+    MAIL_PASSWORD=os.getenv("MAIL_PASSWORD", "consolepass"), # Placeholder for console
+    MAIL_FROM=EmailStr(os.getenv("MAIL_FROM", "cx360-alerts@example.com")),
+    MAIL_PORT=int(os.getenv("MAIL_PORT", "587")), # Placeholder
+    MAIL_SERVER=os.getenv("MAIL_SERVER", "localhost"),     # Placeholder
+    MAIL_STARTTLS=os.getenv("MAIL_STARTTLS", "False").lower() == "true", # Default to False for console/dummy
+    MAIL_SSL_TLS=os.getenv("MAIL_SSL_TLS", "False").lower() == "true",  # Default to False for console/dummy
+    USE_CREDENTIALS=os.getenv("MAIL_USE_CREDENTIALS", "False").lower() == "true", # Default to False for console
+    VALIDATE_CERTS=os.getenv("MAIL_VALIDATE_CERTS", "False").lower() == "true", # Default to False for console
+    SUPPRESS_SEND=int(os.getenv("MAIL_SUPPRESS_SEND", "1")) # 1 to suppress, 0 to send
+)
+fm = FastMail(conf)
+# --- End Email Configuration ---
+
 # Create all tables in the database.
 # This is suitable for development. For production, you'd typically use migrations (e.g., Alembic).
 try:
@@ -28,6 +52,28 @@ app = FastAPI(
     description="API for Customer Experience 360 Platform",
     version="0.1.0",
 )
+
+# --- Scheduler Setup ---
+import logging # Ensure logging is configured for scheduler messages
+from cx360.backend.scheduler import init_scheduler, shutdown_scheduler
+
+# Configure basic logging if not already set up elsewhere (e.g., for Uvicorn's logger)
+# This helps see scheduler logs. APScheduler also uses the 'apscheduler' logger.
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__) # Logger for main.py
+
+@app.on_event("startup")
+async def startup_event():
+    logger.info("Application startup: Initializing scheduler...")
+    init_scheduler()
+    # Any other startup tasks can go here
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.info("Application shutdown: Shutting down scheduler...")
+    shutdown_scheduler()
+    # Any other shutdown tasks can go here
+# --- End Scheduler Setup ---
 
 # Include routers
 app.include_router(auth_router.router)

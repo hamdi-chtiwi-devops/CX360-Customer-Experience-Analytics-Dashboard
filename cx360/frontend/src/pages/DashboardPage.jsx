@@ -5,7 +5,8 @@ import "react-datepicker/dist/react-datepicker.css"; // Import datepicker CSS
 import KPIs from '../components/dashboard/KPIs';
 import FeedbackCountChart from '../components/dashboard/FeedbackCountChart';
 import RatingDistributionChart from '../components/dashboard/RatingDistributionChart';
-import SentimentDistributionChart from '../components/dashboard/SentimentDistributionChart'; // Import new chart
+import SentimentDistributionChart from '../components/dashboard/SentimentDistributionChart';
+import Recommendations from '../components/dashboard/Recommendations'; // Import Recommendations component
 
 function DashboardPage() {
   const [startDate, setStartDate] = useState(null);
@@ -94,6 +95,9 @@ function DashboardPage() {
         <RatingDistributionChart startDate={activeFilters.startDate} endDate={activeFilters.endDate} />
         <SentimentDistributionChart startDate={activeFilters.startDate} endDate={activeFilters.endDate} />
       </div>
+
+      {/* Recommendations Section */}
+      <Recommendations />
 
     </div>
   );

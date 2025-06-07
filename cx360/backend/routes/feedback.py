@@ -12,6 +12,8 @@ from cx360.backend.models.user import User as UserModel
 from cx360.backend.routes.auth import get_current_active_user
 # Sentiment service import
 from cx360.backend.services.sentiment_service import analyze_sentiment
+# Alert service import
+from cx360.backend.services.alert_service import check_for_recent_negative_feedback_alert
 
 router = APIRouter(
     prefix="/feedback",
@@ -40,6 +42,10 @@ def db_create_feedback(db: Session, feedback_in: FeedbackCreate, user_id: Option
     db.add(db_feedback)
     db.commit()
     db.refresh(db_feedback)
+
+    # Check for alerts after new feedback is committed
+    check_for_recent_negative_feedback_alert(db=db)
+
     return db_feedback
 
 def db_get_feedback(db: Session, feedback_id: int) -> Optional[Feedback]:
@@ -209,6 +215,8 @@ async def upload_feedback_csv(
     if successful_imports > 0:
         try:
             db.commit()
+            # Check for alerts after successful commit of CSV data
+            check_for_recent_negative_feedback_alert(db=db)
         except Exception as e: # Handle potential commit errors (e.g. database constraints if not caught by Pydantic)
             db.rollback()
             # This is tricky: some might have been valid, some caused DB error.

@@ -31,6 +31,30 @@ export const getDashboardKpis = async () => {
   }
 };
 
+export const getRecommendations = async () => {
+  const token = getToken();
+  if (!token) {
+    console.error('No token found for getRecommendations.');
+    throw new Error('Authentication token not found. Please login.');
+  }
+
+  const config = {
+    headers: { Authorization: `Bearer ${token}` },
+  };
+
+  try {
+    const response = await axios.get(`${API_URL}/dashboard/recommendations`, config);
+    // Assuming backend response is { recommendations: ["rec1", "rec2"] }
+    return response.data.recommendations;
+  } catch (error) {
+    console.error("Error fetching recommendations:", error.response ? error.response.data : error.message);
+    const errorMessage = error.response && error.response.data && error.response.data.detail
+                       ? error.response.data.detail
+                       : error.message;
+    throw new Error(errorMessage || 'Failed to fetch recommendations.');
+  }
+};
+
 export const getSentimentDistribution = async (params = {}) => {
   const token = getToken();
   if (!token) {

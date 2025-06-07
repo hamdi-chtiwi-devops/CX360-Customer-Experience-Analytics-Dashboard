@@ -16,3 +16,9 @@ pytest-mock # For mocking
 
 # NLP / Sentiment Analysis
 vaderSentiment
+
+# Email
+fastapi-mail
+
+# Scheduling
+APScheduler
