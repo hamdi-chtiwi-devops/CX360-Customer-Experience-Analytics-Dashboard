@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+pydantic
+passlib[bcrypt]
+python-jose[cryptography]
+# Add other dependencies as needed, e.g., SQLAlchemy, psycopg2-binary for PostgreSQL
+SQLAlchemy
+psycopg2-binary
