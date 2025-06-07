@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:13
+    container_name: cx360_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cx_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cx_password}
+      POSTGRES_DB: ${POSTGRES_DB:-cx360_db}
+    ports:
+      - "${DB_PORT:-5432}:5432" # Allows connecting to DB from host via localhost:DB_PORT
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cx_user} -d ${POSTGRES_DB:-cx360_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend # Specifies that Dockerfile is in ./backend directory
+      dockerfile: Dockerfile # Explicitly names the Dockerfile
+    container_name: cx360_backend
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    environment:
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-cx_user}:${POSTGRES_PASSWORD:-cx_password}@db:5432/${POSTGRES_DB:-cx360_db}"
+      # Example: SECRET_KEY: your_actual_secret_key_here (should be from .env or secrets management)
+      # PYTHONUNBUFFERED: 1 # Often good for seeing logs immediately
+    depends_on:
+      db: # Ensures db is healthy before backend starts (if healthcheck is effective)
+        condition: service_healthy
+        # For older docker-compose, just `depends_on: - db` might be used without healthcheck condition
+    restart: unless-stopped
+    # For development with live reload, you might mount the code volume:
+    # volumes:
+    #   - ./backend:/app_code/cx360/backend
+    # And change CMD in Dockerfile or command here for --reload,
+    # but this setup is for a built image without live reload by default.
+
+volumes:
+  postgres_data:
+    driver: local # Explicitly define driver, though 'local' is default
+```

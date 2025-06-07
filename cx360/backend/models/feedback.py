@@ -48,3 +48,16 @@ class FeedbackResponse(FeedbackBase):
 
     class Config:
         from_attributes = True # Pydantic V2 (formerly orm_mode)
+
+# Pydantic Model for CSV Row Validation
+from pydantic import conint, constr # Already have BaseModel, EmailStr, Optional, datetime
+
+class FeedbackCsvRow(BaseModel):
+    customer_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    rating: conint(ge=1, le=5) # Assuming 1-5 rating scale
+    feedback_text: constr(min_length=1)
+    source: Optional[str] = None
+    # Pydantic will try to parse common datetime strings.
+    # For specific formats, custom validator or pre-parsing might be needed.
+    created_at: Optional[datetime] = None

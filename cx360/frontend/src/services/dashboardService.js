@@ -30,3 +30,41 @@ export const getDashboardKpis = async () => {
     throw new Error(errorMessage || 'Failed to fetch dashboard KPIs.');
   }
 };
+
+export const getFeedbackCountOverTime = async () => {
+  const token = getToken();
+  if (!token) {
+    console.error('No token found for getFeedbackCountOverTime.');
+    throw new Error('Authentication token not found. Please login.');
+  }
+  const config = { headers: { Authorization: `Bearer ${token}` } };
+  try {
+    const response = await axios.get(`${API_URL}/dashboard/kpis/feedback-over-time`, config);
+    return response.data; // Expects { data: [{ date: 'YYYY-MM-DD', count: int }] }
+  } catch (error) {
+    console.error("Error fetching feedback count over time:", error.response ? error.response.data : error.message);
+    const errorMessage = error.response && error.response.data && error.response.data.detail
+                       ? error.response.data.detail
+                       : error.message;
+    throw new Error(errorMessage || 'Failed to fetch feedback count over time.');
+  }
+};
+
+export const getRatingDistribution = async () => {
+  const token = getToken();
+  if (!token) {
+    console.error('No token found for getRatingDistribution.');
+    throw new Error('Authentication token not found. Please login.');
+  }
+  const config = { headers: { Authorization: `Bearer ${token}` } };
+  try {
+    const response = await axios.get(`${API_URL}/dashboard/kpis/rating-distribution`, config);
+    return response.data; // Expects { data: [{ rating: int, count: int }] }
+  } catch (error) {
+    console.error("Error fetching rating distribution:", error.response ? error.response.data : error.message);
+    const errorMessage = error.response && error.response.data && error.response.data.detail
+                       ? error.response.data.detail
+                       : error.message;
+    throw new Error(errorMessage || 'Failed to fetch rating distribution.');
+  }
+};

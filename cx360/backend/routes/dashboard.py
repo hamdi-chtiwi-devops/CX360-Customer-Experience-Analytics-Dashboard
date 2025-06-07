@@ -21,6 +21,25 @@ class KpiResponse(BaseModel):
     total_feedback: int
     average_rating: Optional[float] = None
 
+# --- Pydantic Models for Chart Data ---
+from datetime import date # Add this import
+from typing import List # Add this import
+
+class FeedbackCountOverTimePoint(BaseModel):
+    date: date
+    count: int
+
+class FeedbackCountOverTimeResponse(BaseModel):
+    data: List[FeedbackCountOverTimePoint]
+
+class RatingDistributionPoint(BaseModel):
+    rating: int # Assuming rating is stored as integer
+    count: int
+
+class RatingDistributionResponse(BaseModel):
+    data: List[RatingDistributionPoint]
+
+
 @router.get("/kpis", response_model=KpiResponse)
 async def get_dashboard_kpis(db: Session = Depends(get_db), current_user: UserResponse = Depends(get_current_active_user)):
     # current_user is injected by Depends(get_current_active_user) but not directly used in this specific KPI calculation.
@@ -43,3 +62,57 @@ async def get_dashboard_kpis(db: Session = Depends(get_db), current_user: UserRe
         total_feedback=total_feedback if total_feedback is not None else 0,
         average_rating=average_rating
     )
+
+# --- Endpoint for Feedback Count Over Time ---
+from sqlalchemy import cast, Date as SQLDate # Add these specific imports
+from datetime import timedelta # Already have 'date' from Pydantic models section
+
+@router.get("/kpis/feedback-over-time", response_model=FeedbackCountOverTimeResponse)
+async def get_feedback_count_over_time(
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_active_user) # Endpoint is protected
+):
+    thirty_days_ago = date.today() - timedelta(days=30)
+
+    query_result = (
+        db.query(
+            cast(FeedbackModel.created_at, SQLDate).label("feedback_date"),
+            func.count(FeedbackModel.id).label("feedback_count")
+        )
+        .filter(cast(FeedbackModel.created_at, SQLDate) >= thirty_days_ago)
+        .group_by(cast(FeedbackModel.created_at, SQLDate))
+        .order_by(cast(FeedbackModel.created_at, SQLDate))
+        .all()
+    )
+
+    # Convert query result (list of Row objects) to list of Pydantic models
+    data_points = [
+        FeedbackCountOverTimePoint(date=row.feedback_date, count=row.feedback_count)
+        for row in query_result
+    ]
+
+    return FeedbackCountOverTimeResponse(data=data_points)
+
+# --- Endpoint for Rating Distribution ---
+@router.get("/kpis/rating-distribution", response_model=RatingDistributionResponse)
+async def get_rating_distribution(
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_active_user) # Endpoint is protected
+):
+    query_result = (
+        db.query(
+            FeedbackModel.rating.label("rating_value"),
+            func.count(FeedbackModel.id).label("rating_count")
+        )
+        .filter(FeedbackModel.rating.isnot(None)) # Only include feedback with a rating
+        .group_by(FeedbackModel.rating)
+        .order_by(FeedbackModel.rating)
+        .all()
+    )
+
+    data_points = [
+        RatingDistributionPoint(rating=row.rating_value, count=row.rating_count)
+        for row in query_result if row.rating_value is not None # Ensure rating_value itself isn't None after query
+    ]
+
+    return RatingDistributionResponse(data=data_points)

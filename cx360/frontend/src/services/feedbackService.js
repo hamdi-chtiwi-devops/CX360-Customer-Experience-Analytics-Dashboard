@@ -20,6 +20,73 @@ export const getFeedbackList = async () => {
   }
 };
 
+export const exportFeedbackCsv = async () => {
+  const token = getToken();
+  if (!token) {
+    console.error('No token found for CSV export.');
+    throw new Error('Authentication token not found. Please login.');
+  }
+
+  const config = {
+    headers: { Authorization: `Bearer ${token}` },
+    responseType: 'blob', // Important for file downloads
+  };
+
+  try {
+    const response = await axios.get(`${API_URL}/feedback/export-csv`, config);
+    return response; // Return the full Axios response object (contains data as blob and headers)
+  } catch (error) {
+    console.error("Error exporting CSV:", error.response ? error.response.data : error.message);
+    // Try to parse error from blob if server sends error as blob (unlikely for GET errors but possible)
+    // For now, assume error details are in standard error properties or a generic message.
+    const errorMessage = error.response && error.response.data && typeof error.response.data === 'string'
+                       ? error.response.data // If error data is string
+                       : error.message; // Default error message
+    if (error.response && error.response.data instanceof Blob) {
+        try {
+            const errText = await error.response.data.text();
+            const errJson = JSON.parse(errText);
+            if (errJson && errJson.detail) {
+                 throw new Error(errJson.detail);
+            }
+        } catch (e) {
+            // Ignore parsing error, use default message
+        }
+    }
+    throw new Error(errorMessage || 'Failed to export CSV file.');
+  }
+};
+
+export const uploadFeedbackCsv = async (file) => {
+  const token = getToken();
+  if (!token) {
+    console.error('No token found for CSV upload.');
+    throw new Error('Authentication token not found. Please login.');
+  }
+
+  const formData = new FormData();
+  formData.append('csv_file', file); // 'csv_file' must match the FastAPI parameter name in the backend
+
+  const config = {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'multipart/form-data', // Axios might set this automatically with FormData, but explicit is fine
+    },
+  };
+
+  try {
+    const response = await axios.post(`${API_URL}/feedback/upload-csv`, formData, config);
+    return response.data; // Expects CsvImportResponse: { successful_imports, failed_rows, errors: [...] }
+  } catch (error) {
+    console.error("Error uploading CSV:", error.response ? error.response.data : error.message);
+    // Rethrow a more specific error message if available from backend, otherwise generic
+    const errorMessage = error.response && error.response.data && error.response.data.detail
+                       ? error.response.data.detail
+                       : error.message;
+    throw new Error(errorMessage || 'Failed to upload CSV file.');
+  }
+};
+
 export const submitFeedback = async (feedbackData) => {
   const token = getToken();
   // Backend POST /feedback/ can be anonymous or user-associated.

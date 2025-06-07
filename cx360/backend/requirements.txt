@@ -6,3 +6,10 @@ python-jose[cryptography]
 # Add other dependencies as needed, e.g., SQLAlchemy, psycopg2-binary for PostgreSQL
 SQLAlchemy
 psycopg2-binary
+
+# Testing dependencies
+pytest
+pytest-cov
+httpx # For FastAPI TestClient
+pytest-asyncio
+pytest-mock # For mocking
