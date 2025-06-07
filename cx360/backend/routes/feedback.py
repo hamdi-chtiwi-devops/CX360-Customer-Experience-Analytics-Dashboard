@@ -7,9 +7,11 @@ from cx360.backend.database import get_db
 
 # Models and Schemas
 from cx360.backend.models.feedback import Feedback, FeedbackCreate, FeedbackUpdate, FeedbackResponse
-from cx360.backend.models.user import User as UserModel # SQLAlchemy User model
+from cx360.backend.models.user import User as UserModel
 # Auth dependencies
-from cx360.backend.routes.auth import get_current_active_user # Adjusted import path
+from cx360.backend.routes.auth import get_current_active_user
+# Sentiment service import
+from cx360.backend.services.sentiment_service import analyze_sentiment
 
 router = APIRouter(
     prefix="/feedback",
@@ -21,9 +23,20 @@ router = APIRouter(
 # These can be moved to a separate crud_feedback.py file later for better organization
 
 def db_create_feedback(db: Session, feedback_in: FeedbackCreate, user_id: Optional[int] = None) -> Feedback:
-    db_feedback = Feedback(**feedback_in.model_dump(exclude_unset=True)) # Use model_dump for Pydantic v2
+    # Create the Feedback instance from Pydantic model
+    db_feedback = Feedback(**feedback_in.model_dump(exclude_unset=True))
     if user_id:
         db_feedback.user_id = user_id
+
+    # Perform sentiment analysis
+    if db_feedback.feedback_text: # Ensure there's text to analyze
+        sentiment_data = analyze_sentiment(db_feedback.feedback_text)
+        db_feedback.sentiment_score = sentiment_data['score']
+        db_feedback.sentiment_label = sentiment_data['label']
+    else: # Handle cases where feedback_text might be empty or None explicitly
+        db_feedback.sentiment_score = None
+        db_feedback.sentiment_label = None
+
     db.add(db_feedback)
     db.commit()
     db.refresh(db_feedback)
@@ -49,8 +62,25 @@ def db_update_feedback(db: Session, feedback_id: int, feedback_in: FeedbackUpdat
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to update this feedback")
 
     update_data = feedback_in.model_dump(exclude_unset=True)
+    feedback_text_updated = False
+    new_feedback_text = None
+
     for key, value in update_data.items():
         setattr(db_feedback, key, value)
+        if key == "feedback_text":
+            feedback_text_updated = True
+            new_feedback_text = value # This will be the new text, or None if cleared
+
+    # If feedback_text was part of the update, re-analyze sentiment
+    if feedback_text_updated:
+        if new_feedback_text: # Text was provided
+            sentiment_data = analyze_sentiment(new_feedback_text)
+            db_feedback.sentiment_score = sentiment_data['score']
+            db_feedback.sentiment_label = sentiment_data['label']
+        else: # Text was cleared (set to None or empty string which analyze_sentiment handles)
+            # analyze_sentiment will return neutral for empty/None. Or explicitly set to None.
+            db_feedback.sentiment_score = None
+            db_feedback.sentiment_label = None # Or 'neutral' if empty string was passed to analyze_sentiment
 
     db.commit()
     db.refresh(db_feedback)
@@ -141,10 +171,21 @@ async def upload_feedback_csv(
             # Create SQLAlchemy model instance
             # Note: csv_row_model.created_at will be a datetime object if parsing succeeded.
             # FeedbackSQLModel expects datetime object for created_at.
-            feedback_db_entry = Feedback( # Assuming Feedback is the SQLAlchemy model alias
-                **csv_row_model.model_dump(exclude_unset=True),
+            feedback_values = csv_row_model.model_dump(exclude_unset=True)
+            feedback_db_entry = Feedback(
+                **feedback_values,
                 user_id=current_user.id # Associate with the uploader
             )
+
+            # Perform sentiment analysis for CSV row
+            if feedback_db_entry.feedback_text:
+                sentiment_data = analyze_sentiment(feedback_db_entry.feedback_text)
+                feedback_db_entry.sentiment_score = sentiment_data['score']
+                feedback_db_entry.sentiment_label = sentiment_data['label']
+            else:
+                feedback_db_entry.sentiment_score = None
+                feedback_db_entry.sentiment_label = None
+
             db.add(feedback_db_entry)
             successful_imports += 1
 

@@ -31,13 +31,48 @@ export const getDashboardKpis = async () => {
   }
 };
 
-export const getFeedbackCountOverTime = async () => {
+export const getSentimentDistribution = async (params = {}) => {
+  const token = getToken();
+  if (!token) {
+    console.error('No token found for getSentimentDistribution.');
+    throw new Error('Authentication token not found. Please login.');
+  }
+
+  const queryParams = {};
+  if (params.startDate) queryParams.start_date = params.startDate; // Expect YYYY-MM-DD string
+  if (params.endDate) queryParams.end_date = params.endDate;     // Expect YYYY-MM-DD string
+
+  const config = {
+    headers: { Authorization: `Bearer ${token}` },
+    params: queryParams
+  };
+  try {
+    const response = await axios.get(`${API_URL}/dashboard/kpis/sentiment-distribution`, config);
+    return response.data; // Expects { data: [{ label: str, count: int }] }
+  } catch (error) {
+    console.error("Error fetching sentiment distribution:", error.response ? error.response.data : error.message);
+    const errorMessage = error.response && error.response.data && error.response.data.detail
+                       ? error.response.data.detail
+                       : error.message;
+    throw new Error(errorMessage || 'Failed to fetch sentiment distribution.');
+  }
+};
+
+export const getFeedbackCountOverTime = async (params = {}) => {
   const token = getToken();
   if (!token) {
     console.error('No token found for getFeedbackCountOverTime.');
     throw new Error('Authentication token not found. Please login.');
   }
-  const config = { headers: { Authorization: `Bearer ${token}` } };
+
+  const queryParams = {};
+  if (params.startDate) queryParams.start_date = params.startDate; // Expect YYYY-MM-DD string
+  if (params.endDate) queryParams.end_date = params.endDate;     // Expect YYYY-MM-DD string
+
+  const config = {
+    headers: { Authorization: `Bearer ${token}` },
+    params: queryParams
+  };
   try {
     const response = await axios.get(`${API_URL}/dashboard/kpis/feedback-over-time`, config);
     return response.data; // Expects { data: [{ date: 'YYYY-MM-DD', count: int }] }
@@ -50,13 +85,21 @@ export const getFeedbackCountOverTime = async () => {
   }
 };
 
-export const getRatingDistribution = async () => {
+export const getRatingDistribution = async (params = {}) => {
   const token = getToken();
   if (!token) {
     console.error('No token found for getRatingDistribution.');
     throw new Error('Authentication token not found. Please login.');
   }
-  const config = { headers: { Authorization: `Bearer ${token}` } };
+
+  const queryParams = {};
+  if (params.startDate) queryParams.start_date = params.startDate; // Expect YYYY-MM-DD string
+  if (params.endDate) queryParams.end_date = params.endDate;     // Expect YYYY-MM-DD string
+
+  const config = {
+    headers: { Authorization: `Bearer ${token}` },
+    params: queryParams
+  };
   try {
     const response = await axios.get(`${API_URL}/dashboard/kpis/rating-distribution`, config);
     return response.data; // Expects { data: [{ rating: int, count: int }] }

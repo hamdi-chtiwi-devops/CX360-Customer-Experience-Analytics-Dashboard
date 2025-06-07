@@ -4,7 +4,7 @@ import { getRatingDistribution } from '../../services/dashboardService';
 
 const RATING_COLORS = ['#FF6B6B', '#FFD93D', '#6BCB77', '#4D96FF', '#BF55EC']; // Example colors for ratings 1-5
 
-function RatingDistributionChart() {
+function RatingDistributionChart({ startDate, endDate }) { // Accept startDate and endDate as props
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -14,15 +14,14 @@ function RatingDistributionChart() {
       try {
         setLoading(true);
         setError(null);
-        const result = await getRatingDistribution();
-        // Ensure result.data is an array
-        const dataToProcess = Array.isArray(result.data) ? result.data : [];
+        // Pass startDate and endDate to the service call
+        const result = await getRatingDistribution({ startDate, endDate });
 
-        // Add color to each data point for the bar chart
+        const dataToProcess = Array.isArray(result.data) ? result.data : [];
         const formattedData = dataToProcess.map((item, index) => ({
           ...item,
-          name: `Rating ${item.rating}`, // For XAxis dataKey if needed, or Tooltip
-          fill: RATING_COLORS[item.rating - 1] || RATING_COLORS[index % RATING_COLORS.length], // Assign color based on rating value
+          name: `Rating ${item.rating}`,
+          fill: RATING_COLORS[item.rating - 1] || RATING_COLORS[index % RATING_COLORS.length],
         }));
         setChartData(formattedData);
       } catch (err) {
@@ -33,7 +32,7 @@ function RatingDistributionChart() {
       }
     };
     fetchData();
-  }, []);
+  }, [startDate, endDate]); // Add startDate and endDate to dependency array
 
   if (loading) return <p className="text-center text-gray-600 py-4">Loading Rating Distribution Chart...</p>;
   if (error) return <p className="text-center text-red-500 bg-red-100 p-3 rounded-md">Error: {error}</p>;

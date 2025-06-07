@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { getFeedbackCountOverTime } from '../../services/dashboardService';
 
-function FeedbackCountChart() {
+function FeedbackCountChart({ startDate, endDate }) { // Accept startDate and endDate as props
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -11,17 +11,13 @@ function FeedbackCountChart() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        setError(null); // Clear previous errors
-        const result = await getFeedbackCountOverTime();
+        setError(null);
+        // Pass startDate and endDate to the service call
+        const result = await getFeedbackCountOverTime({ startDate, endDate });
 
-        // Ensure result.data is an array before mapping
         const dataToProcess = Array.isArray(result.data) ? result.data : [];
-
         const formattedData = dataToProcess.map(item => ({
           ...item,
-          // Format date for display if needed, e.g., from 'YYYY-MM-DD' to 'MM/DD'
-          // The date from backend is already 'YYYY-MM-DD' which Recharts can often handle.
-          // For more specific formatting:
           date: new Date(item.date + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
         }));
         setChartData(formattedData);
@@ -33,7 +29,7 @@ function FeedbackCountChart() {
       }
     };
     fetchData();
-  }, []);
+  }, [startDate, endDate]); // Add startDate and endDate to dependency array
 
   if (loading) return <p className="text-center text-gray-600 py-4">Loading Feedback Count Chart...</p>;
   if (error) return <p className="text-center text-red-500 bg-red-100 p-3 rounded-md">Error: {error}</p>;

@@ -13,3 +13,6 @@ pytest-cov
 httpx # For FastAPI TestClient
 pytest-asyncio
 pytest-mock # For mocking
+
+# NLP / Sentiment Analysis
+vaderSentiment

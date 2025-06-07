@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Float # Added Float
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from cx360.backend.database import Base # Adjusted import path
@@ -20,6 +20,10 @@ class Feedback(Base):
 
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     submitter = relationship("User", back_populates="feedbacks")
+
+    # New sentiment fields
+    sentiment_score = Column(Float, nullable=True)
+    sentiment_label = Column(String(20), nullable=True) # e.g., "positive", "negative", "neutral"
 
 # Pydantic Schemas for Feedback
 class FeedbackBase(BaseModel):
@@ -43,8 +47,12 @@ class FeedbackUpdate(BaseModel):
 class FeedbackResponse(FeedbackBase):
     id: int
     created_at: datetime
-    updated_at: datetime
-    # user_id: Optional[int] = None # Already in FeedbackBase, good to show explicitly if needed
+    updated_at: Optional[datetime] = None # Ensure updated_at is optional if it can be null
+    # user_id is already in FeedbackBase and thus inherited.
+
+    # New sentiment fields for response
+    sentiment_score: Optional[float] = None
+    sentiment_label: Optional[str] = None
 
     class Config:
         from_attributes = True # Pydantic V2 (formerly orm_mode)

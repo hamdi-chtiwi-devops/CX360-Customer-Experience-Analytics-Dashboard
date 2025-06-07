@@ -27,6 +27,22 @@ function FeedbackItem({ feedback }) {
           <p><strong>User ID:</strong> {feedback.user_id}</p>
         )}
       </div>
+
+      {/* Sentiment Display */}
+      {feedback.sentiment_label && (
+        <div className="mt-4 pt-3 border-t border-gray-200"> {/* Added border-t for separation */}
+          <span
+            className={`px-3 py-1 text-xs font-bold rounded-full leading-none
+                        ${feedback.sentiment_label === 'positive' ? 'bg-green-100 text-green-800' :
+                          feedback.sentiment_label === 'negative' ? 'bg-red-100 text-red-800' :
+                          'bg-yellow-100 text-yellow-800' // Default/neutral
+                        }`}
+          >
+            Sentiment: {feedback.sentiment_label.charAt(0).toUpperCase() + feedback.sentiment_label.slice(1)}
+            {typeof feedback.sentiment_score === 'number' && ` (${feedback.sentiment_score.toFixed(2)})`}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

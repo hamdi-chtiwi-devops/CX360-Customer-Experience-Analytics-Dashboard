@@ -39,6 +39,13 @@ class RatingDistributionPoint(BaseModel):
 class RatingDistributionResponse(BaseModel):
     data: List[RatingDistributionPoint]
 
+class SentimentDistributionPoint(BaseModel):
+    label: str
+    count: int
+
+class SentimentDistributionResponse(BaseModel):
+    data: List[SentimentDistributionPoint]
+
 
 @router.get("/kpis", response_model=KpiResponse)
 async def get_dashboard_kpis(db: Session = Depends(get_db), current_user: UserResponse = Depends(get_current_active_user)):
@@ -64,26 +71,53 @@ async def get_dashboard_kpis(db: Session = Depends(get_db), current_user: UserRe
     )
 
 # --- Endpoint for Feedback Count Over Time ---
-from sqlalchemy import cast, Date as SQLDate # Add these specific imports
-from datetime import timedelta # Already have 'date' from Pydantic models section
+from sqlalchemy import cast, Date as SQLDate
+from datetime import timedelta, date as py_date # Renamed to avoid conflict with Pydantic's date
+from fastapi import Query # For query parameter descriptions and validation
 
 @router.get("/kpis/feedback-over-time", response_model=FeedbackCountOverTimeResponse)
 async def get_feedback_count_over_time(
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_active_user) # Endpoint is protected
+    current_user: UserResponse = Depends(get_current_active_user), # Endpoint is protected
+    start_date: Optional[py_date] = Query(None, description="Start date (YYYY-MM-DD) for filtering feedback. Defaults to 30 days ago if end_date is also None."),
+    end_date: Optional[py_date] = Query(None, description="End date (YYYY-MM-DD) for filtering feedback. Defaults to today if start_date is also None.")
 ):
-    thirty_days_ago = date.today() - timedelta(days=30)
+    # Determine effective date range
+    effective_start_date: py_date
+    effective_end_date: py_date
 
-    query_result = (
+    if start_date is None and end_date is None:
+        # Default: last 30 days
+        effective_end_date = py_date.today()
+        effective_start_date = effective_end_date - timedelta(days=29) # Inclusive 30 days
+    elif start_date is None:
+        # Only end_date is provided: default start_date to 30 days before end_date
+        effective_end_date = end_date
+        effective_start_date = effective_end_date - timedelta(days=29)
+    elif end_date is None:
+        # Only start_date is provided: default end_date to today
+        effective_start_date = start_date
+        effective_end_date = py_date.today()
+    else:
+        # Both start_date and end_date are provided
+        effective_start_date = start_date
+        effective_end_date = end_date
+
+    if effective_start_date > effective_end_date:
+        raise HTTPException(status_code=400, detail="Start date cannot be after end date.")
+
+    query = (
         db.query(
             cast(FeedbackModel.created_at, SQLDate).label("feedback_date"),
             func.count(FeedbackModel.id).label("feedback_count")
         )
-        .filter(cast(FeedbackModel.created_at, SQLDate) >= thirty_days_ago)
+        .filter(cast(FeedbackModel.created_at, SQLDate) >= effective_start_date)
+        .filter(cast(FeedbackModel.created_at, SQLDate) <= effective_end_date)
         .group_by(cast(FeedbackModel.created_at, SQLDate))
         .order_by(cast(FeedbackModel.created_at, SQLDate))
-        .all()
     )
+
+    query_result = query.all()
 
     # Convert query result (list of Row objects) to list of Pydantic models
     data_points = [
@@ -97,18 +131,36 @@ async def get_feedback_count_over_time(
 @router.get("/kpis/rating-distribution", response_model=RatingDistributionResponse)
 async def get_rating_distribution(
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_active_user) # Endpoint is protected
+    current_user: UserResponse = Depends(get_current_active_user), # Endpoint is protected
+    start_date: Optional[py_date] = Query(None, description="Start date (YYYY-MM-DD) to filter ratings. If provided, end_date should also be considered or defaults to today."),
+    end_date: Optional[py_date] = Query(None, description="End date (YYYY-MM-DD) to filter ratings. If provided, start_date should also be considered or defaults to a very early date.")
 ):
-    query_result = (
+    query = (
         db.query(
             FeedbackModel.rating.label("rating_value"),
             func.count(FeedbackModel.id).label("rating_count")
         )
         .filter(FeedbackModel.rating.isnot(None)) # Only include feedback with a rating
-        .group_by(FeedbackModel.rating)
-        .order_by(FeedbackModel.rating)
-        .all()
     )
+
+    # Apply date filters if provided
+    if start_date and end_date:
+        if start_date > end_date:
+            raise HTTPException(status_code=400, detail="Start date cannot be after end date.")
+        query = query.filter(cast(FeedbackModel.created_at, SQLDate) >= start_date)
+        query = query.filter(cast(FeedbackModel.created_at, SQLDate) <= end_date)
+    elif start_date: # Only start_date is provided
+        query = query.filter(cast(FeedbackModel.created_at, SQLDate) >= start_date)
+        # Optionally, could default end_date to today, or require both if one is given.
+        # For rating distribution, perhaps filtering from start_date to infinity (or today) is fine.
+        # Let's assume if only start_date, it's from start_date until now.
+        query = query.filter(cast(FeedbackModel.created_at, SQLDate) <= py_date.today())
+    elif end_date: # Only end_date is provided
+        query = query.filter(cast(FeedbackModel.created_at, SQLDate) <= end_date)
+        # If only end_date, filter up to that date from the beginning of time.
+        # No specific start_date filter needed in this case beyond what's already in the query.
+
+    query_result = query.group_by(FeedbackModel.rating).order_by(FeedbackModel.rating).all()
 
     data_points = [
         RatingDistributionPoint(rating=row.rating_value, count=row.rating_count)
@@ -116,3 +168,42 @@ async def get_rating_distribution(
     ]
 
     return RatingDistributionResponse(data=data_points)
+
+# --- Endpoint for Sentiment Distribution ---
+@router.get("/kpis/sentiment-distribution", response_model=SentimentDistributionResponse)
+async def get_sentiment_distribution(
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_active_user), # Endpoint is protected
+    start_date: Optional[py_date] = Query(None, description="Start date (YYYY-MM-DD) to filter sentiment distribution."),
+    end_date: Optional[py_date] = Query(None, description="End date (YYYY-MM-DD) to filter sentiment distribution.")
+):
+    query = (
+        db.query(
+            FeedbackModel.sentiment_label,
+            func.count(FeedbackModel.id).label("count")
+        )
+        .filter(FeedbackModel.sentiment_label.isnot(None)) # Only include feedback with a sentiment label
+        .filter(FeedbackModel.sentiment_label != "") # Also filter out empty strings if they can occur
+    )
+
+    # Apply date filters if provided
+    if start_date and end_date:
+        if start_date > end_date:
+            raise HTTPException(status_code=400, detail="Start date cannot be after end date.")
+        query = query.filter(cast(FeedbackModel.created_at, SQLDate) >= start_date)
+        query = query.filter(cast(FeedbackModel.created_at, SQLDate) <= end_date)
+    elif start_date: # Only start_date is provided
+        query = query.filter(cast(FeedbackModel.created_at, SQLDate) >= start_date)
+        query = query.filter(cast(FeedbackModel.created_at, SQLDate) <= py_date.today()) # Default end to today
+    elif end_date: # Only end_date is provided
+        query = query.filter(cast(FeedbackModel.created_at, SQLDate) <= end_date)
+        # No specific start_date filter needed (from beginning of time up to end_date)
+
+    query_result = query.group_by(FeedbackModel.sentiment_label).all()
+
+    response_data = [
+        SentimentDistributionPoint(label=row.sentiment_label, count=row.count)
+        for row in query_result if row.sentiment_label # Ensure label is not None from query itself
+    ]
+
+    return SentimentDistributionResponse(data=response_data)
